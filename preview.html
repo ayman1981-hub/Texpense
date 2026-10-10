@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<!--
+  preview.html — STATIC SNAPSHOT of the dashboard for the Preview tab.
+
+  Development artifact, not part of the application. It is a hand-rendered copy
+  of what index.php emits for the sample trip below, so the UI can be viewed
+  without a PHP runtime. Real rendering lives in index.php.
+
+  Sample state (internally consistent):
+    trip: Munnar Trip 2026, 6 members, total ₹18,600.00 across 4 expenses
+      Hotel Stay (2 nights) ₹9,600.00 paid by Anshad — split 6 ways (₹1,600 each)
+      Jeep Safari           ₹3,000.00 paid by Safvan — split 3 ways (₹1,000 each,
+                                                        only Ayman/Safvan/Umair)
+      Train Tickets         ₹4,200.00 paid by Safvan — split 6 ways (₹700 each)
+      Dinner at Munnar      ₹1,800.00 paid by Ayman  — split 6 ways (₹300 each)
+    one settlement: Salih -> Anshad ₹2,600.00
+    balances: Anshad +4,400 · Safvan +3,600 · Salih 0 · Ayman -1,800
+              · Ramshad -2,600 · Umair -3,600        (sums to zero)
+
+  Deliberate deviations from index.php (only these):
+    1. Every form uses method="get" action="#", because there is no PHP here to
+     receive a POST. In the app these post to add_expense.php, settle_up.php,
+     delete_expense.php and create_trip.php.
+    2. The CSRF hidden fields are omitted (no session exists here).
+    3. The title is suffixed with "(static preview)".
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Travel Expense Tracker (static preview)</title>
+    <link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+    <!-- ============================================================
+         STATIC PREVIEW BANNER — this file is NOT the application.
+         There is no PHP and no database here: the two trips in the
+         switcher below are hardcoded mock data, and the New Trip modal
+         cannot save anything. Test the real app at
+         http://localhost/travel-tracker/index.php under XAMPP.
+         ============================================================ -->
+    <div class="preview-banner" role="note">
+        <strong>Static preview — not the live app.</strong>
+        Trips cannot be created on this page; the two switcher entries are
+        hardcoded mock data. Run the real dashboard at
+        <code>index.php</code> under XAMPP.
+    </div>
+
+    <!-- ================= Header + trip switcher ================= -->
+    <header class="site-header">
+        <div class="site-header__inner site-header__inner--split">
+            <div class="brand">
+                <span class="brand__mark" aria-hidden="true">✈</span>
+                <div class="brand__text">
+                    <h1 class="brand__title">Travel Tracker</h1>
+                    <p class="brand__subtitle">Split trip costs, settle up later</p>
+                </div>
+            </div>
+
+            <div class="trip-bar">
+                <form class="trip-switcher" action="#" method="get">
+                    <label class="visually-hidden" for="trip_id">Switch trip</label>
+                    <select class="field__input field__input--compact" id="trip_id" name="trip_id" data-trip-switcher aria-label="Switch trip">
+                        <option value="2" selected>Munnar Trip 2026</option>
+                        <option value="1">Goa 2027</option>
+                    </select>
+                    <button class="btn btn--sm btn--ghost" type="submit" data-trip-switcher-submit>Switch</button>
+                </form>
+
+                <button class="btn btn--sm btn--primary" type="button" id="trip-dialog-open">+ New trip</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+
+        <!-- ================= Summary Cards ================= -->
+        <section class="section" aria-labelledby="summary-heading">
+            <div class="card__header card__header--row">
+                <h2 class="section__title" id="summary-heading">Trip Summary</h2>
+                <span class="header-badges">
+                    <span class="badge badge--trip">Munnar Trip 2026</span>
+                    <span class="badge">6 members</span>
+                </span>
+            </div>
+
+            <div class="summary-grid">
+                <article class="card metric-card metric-card--primary">
+                    <p class="metric-card__label">Total Trip Cost (₹)</p>
+                    <p class="metric-card__value">₹18,600.00</p>
+                    <p class="metric-card__meta">Across 4 logged expenses</p>
+                </article>
+
+                <article class="card metric-card metric-card--accent">
+                    <p class="metric-card__label">Average Per Person (₹)</p>
+                    <p class="metric-card__value">₹3,100.00</p>
+                    <p class="metric-card__meta">Average only — each expense is split between the members who shared it</p>
+                </article>
+            </div>
+        </section>
+
+        <!-- ================= Add Expense ================= -->
+        <section class="section" aria-labelledby="add-expense-heading">
+            <div class="card form-card">
+                <header class="card__header">
+                    <h2 class="section__title" id="add-expense-heading">Add Expense</h2>
+                    <p class="card__hint">
+                        Logged against <strong>Munnar Trip 2026</strong>. The amount is divided
+                        between the members you tick below — not the whole trip.
+                    </p>
+                </header>
+
+                <form class="expense-form" action="#" method="get" novalidate>
+                    <div class="form-grid">
+                        <div class="field field--wide">
+                            <label class="field__label" for="description">Description</label>
+                            <input class="field__input" type="text" id="description" name="description"
+                                   placeholder="Dinner, Train Tickets…" maxlength="255" autocomplete="off" required>
+                        </div>
+
+                        <div class="field">
+                            <label class="field__label" for="amount">Total Amount (₹)</label>
+                            <input class="field__input" type="number" id="amount" name="amount"
+                                   placeholder="₹ 0.00" min="0.01" step="0.01" inputmode="decimal" required>
+                        </div>
+
+                        <div class="field">
+                            <label class="field__label" for="payer_id">Paid by</label>
+                            <select class="field__input" id="payer_id" name="payer_id" required>
+                                <option value="" disabled selected>Select a member</option>
+                                <option value="1">Ayman</option>
+                                <option value="2">Anshad</option>
+                                <option value="3">Ramshad</option>
+                                <option value="4">Safvan</option>
+                                <option value="5">Salih</option>
+                                <option value="6">Umair</option>
+                            </select>
+                        </div>
+
+                        <fieldset class="field field--wide participants">
+                            <legend class="field__label">
+                                Split between
+                                <span class="participants__hint" id="split-hint" aria-live="polite">6 members</span>
+                            </legend>
+
+                            <div class="participants__toolbar">
+                                <button class="btn btn--sm btn--ghost" type="button" data-participants-action="all">Select all</button>
+                                <button class="btn btn--sm btn--ghost" type="button" data-participants-action="none">Clear</button>
+                            </div>
+
+                            <div class="participants__grid" id="participants-grid">
+                                <label class="participant">
+                                    <input type="checkbox" name="participants[]" value="1" data-participant checked>
+                                    <span class="participant__name">Ayman</span>
+                                </label>
+                                <label class="participant">
+                                    <input type="checkbox" name="participants[]" value="2" data-participant checked>
+                                    <span class="participant__name">Anshad</span>
+                                </label>
+                                <label class="participant">
+                                    <input type="checkbox" name="participants[]" value="3" data-participant checked>
+                                    <span class="participant__name">Ramshad</span>
+                                </label>
+                                <label class="participant">
+                                    <input type="checkbox" name="participants[]" value="4" data-participant checked>
+                                    <span class="participant__name">Safvan</span>
+                                </label>
+                                <label class="participant">
+                                    <input type="checkbox" name="participants[]" value="5" data-participant checked>
+                                    <span class="participant__name">Salih</span>
+                                </label>
+                                <label class="participant">
+                                    <input type="checkbox" name="participants[]" value="6" data-participant checked>
+                                    <span class="participant__name">Umair</span>
+                                </label>
+                            </div>
+                        </fieldset>
+
+                        <div class="field field--submit">
+                            <button class="btn btn--primary" type="submit">Add Expense</button>
+                        </div>
+                    </div>
+
+                    <p class="form-status" role="status" aria-live="polite"></p>
+                </form>
+            </div>
+        </section>
+
+        <!-- ================= Who Owes Who ================= -->
+        <section class="section" aria-labelledby="balances-heading">
+            <div
+                class="card"
+                id="balances-card"
+                data-trip-name="Munnar Trip 2026"
+                data-total-cents="1860000"
+                data-per-person-cents="310000">
+                <header class="card__header card__header--row">
+                    <h2 class="section__title" id="balances-heading">Who Owes Who</h2>
+                    <button class="btn btn--sm btn--ghost" type="button" id="share-balances" data-share-target="#balances-card">
+                        Share to WhatsApp
+                    </button>
+                </header>
+
+                <ul class="balance-list">
+                    <li class="balance-item balance-item--owing" data-traveler-name="Ayman" data-balance-cents="-180000">
+                        <span class="balance-item__person">
+                            <span class="balance-item__name">Ayman</span>
+                            <span class="balance-item__meta">Paid ₹1,800.00 · owes ₹3,600.00</span>
+                        </span>
+                        <div class="balance-item__actions">
+                            <span class="balance-item__status">Owes ₹1,800.00</span>
+                            <form class="js-confirm" action="#" method="get">
+                                <input type="hidden" name="traveler_id" value="1">
+                                <button class="btn btn--sm btn--success" type="submit" data-confirm-label="Confirm?">Settle Up</button>
+                            </form>
+                        </div>
+                    </li>
+                    <li class="balance-item balance-item--owed" data-traveler-name="Anshad" data-balance-cents="440000">
+                        <span class="balance-item__person">
+                            <span class="balance-item__name">Anshad</span>
+                            <span class="balance-item__meta">Paid ₹9,600.00 · owes ₹2,600.00 · settled -₹2,600.00</span>
+                        </span>
+                        <div class="balance-item__actions">
+                            <span class="balance-item__status">Owed ₹4,400.00</span>
+                        </div>
+                    </li>
+                    <li class="balance-item balance-item--owing" data-traveler-name="Ramshad" data-balance-cents="-260000">
+                        <span class="balance-item__person">
+                            <span class="balance-item__name">Ramshad</span>
+                            <span class="balance-item__meta">Paid ₹0.00 · owes ₹2,600.00</span>
+                        </span>
+                        <div class="balance-item__actions">
+                            <span class="balance-item__status">Owes ₹2,600.00</span>
+                            <form class="js-confirm" action="#" method="get">
+                                <input type="hidden" name="traveler_id" value="3">
+                                <button class="btn btn--sm btn--success" type="submit" data-confirm-label="Confirm?">Settle Up</button>
+                            </form>
+                        </div>
+                    </li>
+                    <li class="balance-item balance-item--owed" data-traveler-name="Safvan" data-balance-cents="360000">
+                        <span class="balance-item__person">
+                            <span class="balance-item__name">Safvan</span>
+                            <span class="balance-item__meta">Paid ₹7,200.00 · owes ₹3,600.00</span>
+                        </span>
+                        <div class="balance-item__actions">
+                            <span class="balance-item__status">Owed ₹3,600.00</span>
+                        </div>
+                    </li>
+                    <li class="balance-item balance-item--settled" data-traveler-name="Salih" data-balance-cents="0">
+                        <span class="balance-item__person">
+                            <span class="balance-item__name">Salih</span>
+                            <span class="balance-item__meta">Paid ₹0.00 · owes ₹2,600.00 · settled ₹2,600.00</span>
+                        </span>
+                        <div class="balance-item__actions">
+                            <span class="balance-item__status">Settled</span>
+                        </div>
+                    </li>
+                    <li class="balance-item balance-item--owing" data-traveler-name="Umair" data-balance-cents="-360000">
+                        <span class="balance-item__person">
+                            <span class="balance-item__name">Umair</span>
+                            <span class="balance-item__meta">Paid ₹0.00 · owes ₹3,600.00</span>
+                        </span>
+                        <div class="balance-item__actions">
+                            <span class="balance-item__status">Owes ₹3,600.00</span>
+                            <form class="js-confirm" action="#" method="get">
+                                <input type="hidden" name="traveler_id" value="6">
+                                <button class="btn btn--sm btn--success" type="submit" data-confirm-label="Confirm?">Settle Up</button>
+                            </form>
+                        </div>
+                    </li>
+                </ul>
+
+                <div class="settlements">
+                    <h3 class="settlements__title">Recent settlements</h3>
+                    <ul class="settlements__list">
+                        <li class="settlements__item">
+                            <span class="settlements__who">Salih <span aria-hidden="true">→</span> Anshad</span>
+                            <span class="settlements__amount">₹2,600.00</span>
+                            <span class="settlements__date">14 Sep 2026</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= Recent Expenses ================= -->
+        <section class="section" aria-labelledby="recent-heading">
+            <div class="card">
+                <header class="card__header card__header--row">
+                    <h2 class="section__title" id="recent-heading">Recent Expenses</h2>
+                    <span class="badge">Last 10</span>
+                </header>
+
+                <div class="table-wrap">
+                    <table class="table">
+                        <caption class="visually-hidden">Most recent expenses in Munnar Trip 2026</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Date</th>
+                                <th scope="col">Description</th>
+                                <th scope="col">Payer</th>
+                                <th scope="col">Shared by</th>
+                                <th scope="col" class="table__num">Total (₹)</th>
+                                <th scope="col" class="table__actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td data-label="Date">14 Sep 2026</td>
+                                <td data-label="Description">Dinner at Munnar</td>
+                                <td data-label="Payer"><span class="chip">Ayman</span></td>
+                                <td data-label="Shared by">
+                                    <span class="table__clamp" title="Ayman, Anshad, Ramshad, Safvan, Salih, Umair">Ayman, Anshad, Ramshad, Safvan, Salih, Umair</span>
+                                    <span class="table__count">6 ways</span>
+                                </td>
+                                <td data-label="Total (₹)" class="table__num">₹1,800.00</td>
+                                <td data-label="Actions" class="table__actions">
+                                    <form class="js-confirm" action="#" method="get">
+                                        <input type="hidden" name="expense_id" value="4">
+                                        <button class="btn btn--sm btn--danger-ghost" type="submit" data-confirm-label="Confirm?" aria-label="Delete expense: Dinner at Munnar">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td data-label="Date">13 Sep 2026</td>
+                                <td data-label="Description">Jeep Safari</td>
+                                <td data-label="Payer"><span class="chip">Safvan</span></td>
+                                <td data-label="Shared by">
+                                    <span class="table__clamp" title="Ayman, Safvan, Umair">Ayman, Safvan, Umair</span>
+                                    <span class="table__count">3 ways</span>
+                                </td>
+                                <td data-label="Total (₹)" class="table__num">₹3,000.00</td>
+                                <td data-label="Actions" class="table__actions">
+                                    <form class="js-confirm" action="#" method="get">
+                                        <input type="hidden" name="expense_id" value="3">
+                                        <button class="btn btn--sm btn--danger-ghost" type="submit" data-confirm-label="Confirm?" aria-label="Delete expense: Jeep Safari">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td data-label="Date">13 Sep 2026</td>
+                                <td data-label="Description">Hotel Stay (2 nights)</td>
+                                <td data-label="Payer"><span class="chip">Anshad</span></td>
+                                <td data-label="Shared by">
+                                    <span class="table__clamp" title="Ayman, Anshad, Ramshad, Safvan, Salih, Umair">Ayman, Anshad, Ramshad, Safvan, Salih, Umair</span>
+                                    <span class="table__count">6 ways</span>
+                                </td>
+                                <td data-label="Total (₹)" class="table__num">₹9,600.00</td>
+                                <td data-label="Actions" class="table__actions">
+                                    <form class="js-confirm" action="#" method="get">
+                                        <input type="hidden" name="expense_id" value="2">
+                                        <button class="btn btn--sm btn--danger-ghost" type="submit" data-confirm-label="Confirm?" aria-label="Delete expense: Hotel Stay (2 nights)">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td data-label="Date">12 Sep 2026</td>
+                                <td data-label="Description">Train Tickets</td>
+                                <td data-label="Payer"><span class="chip">Safvan</span></td>
+                                <td data-label="Shared by">
+                                    <span class="table__clamp" title="Ayman, Anshad, Ramshad, Safvan, Salih, Umair">Ayman, Anshad, Ramshad, Safvan, Salih, Umair</span>
+                                    <span class="table__count">6 ways</span>
+                                </td>
+                                <td data-label="Total (₹)" class="table__num">₹4,200.00</td>
+                                <td data-label="Actions" class="table__actions">
+                                    <form class="js-confirm" action="#" method="get">
+                                        <input type="hidden" name="expense_id" value="1">
+                                        <button class="btn btn--sm btn--danger-ghost" type="submit" data-confirm-label="Confirm?" aria-label="Delete expense: Train Tickets">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= Danger Zone: delete this trip =================
+             Static snapshot: rendered in the LOCKED state because the mock
+             balances above are unsettled. The live index.php swaps this for a
+             real delete_trip.php form once every balance is zero. -->
+        <section class="section" aria-labelledby="danger-heading">
+            <div class="card danger-card">
+                <header class="card__header">
+                    <h2 class="section__title" id="danger-heading">Delete this trip</h2>
+                </header>
+
+                <p class="card__hint">
+                    Permanently removes <strong>Munnar Trip 2026</strong> and everything in it —
+                    members, expenses, splits and settlements. It disappears from the switcher
+                    and cannot be undone.
+                </p>
+
+                <p class="danger-card__locked">
+                    Settle every balance first — 5 members have an unsettled balance.
+                </p>
+                <button class="btn btn--danger" type="button" disabled>Delete trip</button>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="site-footer">
+        <small>&copy; 2026 Travel Tracker</small>
+    </footer>
+
+    <!-- ================= New trip modal ================= -->
+    <dialog class="modal" id="trip-dialog" aria-labelledby="trip-dialog-title">
+        <form class="modal__form" action="#" method="get">
+            <h2 class="modal__title" id="trip-dialog-title">New trip</h2>
+            <p class="modal__hint">Name the trip, then add everyone travelling with you.</p>
+
+            <div class="field">
+                <label class="field__label" for="trip_name">Trip name</label>
+                <input class="field__input" type="text" id="trip_name" name="trip_name"
+                       placeholder="Goa 2027" maxlength="150" autocomplete="off" required>
+            </div>
+
+            <fieldset class="field">
+                <legend class="field__label">Members</legend>
+                <div class="member-rows" id="member-rows"></div>
+                <button class="btn btn--sm btn--ghost" type="button" id="add-member-row">+ Add another member</button>
+            </fieldset>
+
+            <div class="modal__actions">
+                <button class="btn btn--ghost" type="button" id="trip-dialog-cancel">Cancel</button>
+                <button class="btn btn--primary" type="submit">Create trip</button>
+            </div>
+        </form>
+    </dialog>
+
+    <template id="member-row-template">
+        <div class="member-row">
+            <input class="field__input" type="text" name="member_names[]" placeholder="Member name"
+                   maxlength="100" autocomplete="off">
+            <button class="btn btn--sm btn--danger-ghost js-remove-member" type="button" aria-label="Remove this member">Remove</button>
+        </div>
+    </template>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
